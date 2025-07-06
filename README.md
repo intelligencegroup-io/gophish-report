@@ -177,36 +177,38 @@ Example output:
 ```
 [ * ] Starting data processing...
 [ + ] Reading CSV file...
-[ ✔ ] CSV loaded. Rows: 815
+[ ✔ ] CSV loaded. Rows: 871
 [ + ] Extracting details...
-[ * ] Extracting details... 200/815
-[ * ] Extracting details... 400/815
-[ * ] Extracting details... 600/815
-[ * ] Extracting details... 800/815
-[ * ] Extracting details... 815/815
+[ * ] Extracting details... 200/871
+[ * ] Extracting details... 400/871
+[ * ] Extracting details... 600/871
+[ * ] Extracting details... 800/871
+[ * ] Extracting details... 871/871
 [ ✔ ] Details extraction complete.
 [ + ] Performing IP lookups...
-[ * ] Performing IP lookups... 10/126
-[ * ] Performing IP lookups... 20/126
-[ * ] Performing IP lookups... 30/126
-[ * ] Performing IP lookups... 40/126
-[ * ] Performing IP lookups... 50/126
-[ * ] Performing IP lookups... 60/126
-[ * ] Performing IP lookups... 70/126
-[ * ] Performing IP lookups... 80/126
-[ * ] Performing IP lookups... 90/126
-[ * ] Performing IP lookups... 100/126
-[ * ] Performing IP lookups... 110/126
-[ * ] Performing IP lookups... 120/126
-[ * ] Performing IP lookups... 126/126
+[ * ] Performing IP lookups... 10/138
+[ * ] Performing IP lookups... 20/138
+[ * ] Performing IP lookups... 30/138
+[ * ] Performing IP lookups... 40/138
+[ * ] Performing IP lookups... 50/138
+[ * ] Performing IP lookups... 60/138
+[ * ] Performing IP lookups... 70/138
+[ * ] Performing IP lookups... 80/138
+[ * ] Performing IP lookups... 90/138
+[ * ] Performing IP lookups... 100/138
+[ * ] Performing IP lookups... 110/138
+[ * ] Performing IP lookups... 120/138
+[ * ] Performing IP lookups... 130/138
+[ * ] Performing IP lookups... 138/138
 [ ✔ ] IP lookup complete.
 [ + ] Building user data...
 [ ✔ ] User data build complete.
 [ + ] Generating statistics...
-[ ✔ ] Report saved: 20250706_232236.html
+[ ✔ ] Report saved: 20250706_235001.html
+
 ```
 
-Your HTML report, for example `20250706_213726.html`, will be created in the same directory.
+Your HTML report, for example `20250706_235001.html`, will be created in the same directory.
 
 Open it in any browser for a fully interactive report.
 
