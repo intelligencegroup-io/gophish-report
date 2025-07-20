@@ -10,14 +10,11 @@ from jinja2 import Template
 import warnings
 from colorama import init, Fore, Style
 
-# Initialise colour support
 init(autoreset=True)
 
-# Suppress warnings
 warnings.simplefilter("ignore", category=DeprecationWarning)
 warnings.simplefilter("ignore", category=UserWarning)
 
-# ---------- CONFIG ----------
 IPINFO_TOKEN = "your_api_token_here"
 IPINFO_URL = "https://ipinfo.io/{ip}?token=" + IPINFO_TOKEN
 
@@ -28,35 +25,14 @@ PRIVATE_IP_PREFIXES = (
 )
 
 TIMEZONE_OPTIONS = sorted([
-    "Africa/Johannesburg",
-    "America/Anchorage",
-    "America/Chicago",
-    "America/Denver",
-    "America/Los_Angeles",
-    "America/New_York",
-    "America/Sao_Paulo",
-    "Asia/Bangkok",
-    "Asia/Dubai",
-    "Asia/Kolkata",
-    "Asia/Seoul",
-    "Asia/Shanghai",
-    "Asia/Singapore",
-    "Asia/Tokyo",
-    "Australia/Brisbane",
-    "Australia/Perth",
-    "Australia/Sydney",
-    "Europe/Berlin",
-    "Europe/London",
-    "Europe/Madrid",
-    "Europe/Moscow",
-    "Europe/Paris",
-    "Pacific/Auckland",
-    "Pacific/Fiji",
-    "Pacific/Honolulu",
-    "UTC"
+    "Africa/Johannesburg", "America/Anchorage", "America/Chicago", "America/Denver",
+    "America/Los_Angeles", "America/New_York", "America/Sao_Paulo", "Asia/Bangkok", "Asia/Dubai",
+    "Asia/Kolkata", "Asia/Seoul", "Asia/Shanghai", "Asia/Singapore", "Asia/Tokyo",
+    "Australia/Brisbane", "Australia/Perth", "Australia/Sydney", "Europe/Berlin", "Europe/London",
+    "Europe/Madrid", "Europe/Moscow", "Europe/Paris", "Pacific/Auckland", "Pacific/Fiji",
+    "Pacific/Honolulu", "UTC"
 ])
 
-# ---------- PARSE CLI ----------
 parser = argparse.ArgumentParser(description="Generate GoPhish HTML report from CSV export.")
 parser.add_argument("csv_file", help="Path to GoPhish CSV export file")
 args = parser.parse_args()
@@ -65,20 +41,11 @@ INPUT_CSV = args.csv_file
 now_str = datetime.now().strftime("%Y%m%d_%H%M%S")
 OUTPUT_HTML = f"{now_str}.html"
 
-# ---------- UTILITY PRINT FUNCTIONS ----------
-def log_info(message):
-    print(f"{Fore.WHITE}[ * ] {message}{Style.RESET_ALL}")
+def log_info(msg): print(f"{Fore.WHITE}[ * ] {msg}{Style.RESET_ALL}")
+def log_action(msg): print(f"{Fore.WHITE}[ + ] {msg}{Style.RESET_ALL}")
+def log_success(msg): print(f"{Fore.GREEN}[ ✔ ] {msg}{Style.RESET_ALL}")
+def log_progress(msg): print(f"{Fore.CYAN}[ * ] {msg}{Style.RESET_ALL}")
 
-def log_action(message):
-    print(f"{Fore.WHITE}[ + ] {message}{Style.RESET_ALL}")
-
-def log_success(message):
-    print(f"{Fore.GREEN}[ ✔ ] {message}{Style.RESET_ALL}")
-
-def log_progress(message):
-    print(f"{Fore.CYAN}[ * ] {message}{Style.RESET_ALL}")
-
-# ---------- START PROCESS ----------
 log_info("Starting data processing...")
 
 log_action("Reading CSV file...")
@@ -87,53 +54,27 @@ df = df[df["email"].notnull()]
 df["timestamp"] = pd.to_datetime(df["timestamp"], errors="coerce", utc=True)
 log_success(f"CSV loaded. Rows: {len(df)}")
 
-# ---------- EXTRACT DETAILS ----------
 log_action("Extracting details...")
-ip_list = []
-ua_list = []
-client_id_list = []
-submitted_creds = []
-
-total_rows = df.shape[0]
-for idx, (_, row) in enumerate(df.iterrows(), 1):
+ip_list, ua_list, client_id_list, submitted_creds = [], [], [], []
+for _, row in df.iterrows():
     details = row["details"]
     if pd.isnull(details) or details.strip() == "":
-        ip_list.append(None)
-        ua_list.append(None)
-        client_id_list.append(None)
-        submitted_creds.append(None)
-        continue
-
+        ip_list.append(None); ua_list.append(None); client_id_list.append(None); submitted_creds.append(None); continue
     try:
         j = json.loads(details)
         browser = j.get("browser", {})
-        ip_list.append(browser.get("address", None))
-        ua_list.append(browser.get("user-agent", None))
-
+        ip_list.append(browser.get("address")); ua_list.append(browser.get("user-agent"))
         payload = j.get("payload", {})
         client_ids = payload.get("client_id", [])
         client_id_list.append(client_ids[0] if client_ids else None)
-
         if row["event"] == "Submitted Data":
-            extracted = []
-            for key, value in payload.items():
-                if key == "client_id":
-                    continue
-                if isinstance(value, list) and value:
-                    extracted.append((key, value[0]))
-                elif isinstance(value, str):
-                    extracted.append((key, value))
+            extracted = [(k, v[0] if isinstance(v, list) else v)
+                         for k, v in payload.items() if k != "client_id"]
             submitted_creds.append(extracted)
         else:
             submitted_creds.append(None)
-    except Exception:
-        ip_list.append(None)
-        ua_list.append(None)
-        client_id_list.append(None)
-        submitted_creds.append(None)
-
-    if idx % 200 == 0 or idx == total_rows:
-        log_progress(f"Extracting details... {idx}/{total_rows}")
+    except:
+        ip_list.append(None); ua_list.append(None); client_id_list.append(None); submitted_creds.append(None)
 
 df["ip"] = ip_list
 df["user_agent"] = ua_list
@@ -141,74 +82,49 @@ df["client_id"] = client_id_list
 df["credentials"] = submitted_creds
 log_success("Details extraction complete.")
 
-# ---------- IP LOOKUPS ----------
 geo_cache = {}
-
 def lookup_ip(ip):
-    if ip in geo_cache:
-        return geo_cache[ip]
-    if not ip:
-        geo_cache[ip] = ("N/A", "N/A")
-        return geo_cache[ip]
-    if ip.startswith(PRIVATE_IP_PREFIXES):
-        geo_cache[ip] = ("Private/Reserved", "Private/Reserved")
+    if ip in geo_cache: return geo_cache[ip]
+    if not ip or ip.startswith(PRIVATE_IP_PREFIXES):
+        geo_cache[ip] = ("Private/Reserved", "Private/Reserved") if ip else ("N/A", "N/A")
         return geo_cache[ip]
     try:
         r = requests.get(IPINFO_URL.format(ip=ip), timeout=5)
         if r.status_code == 200:
             j = r.json()
-            city = j.get("city", "")
-            region = j.get("region", "")
-            country = j.get("country", "")
-            org = j.get("org", "")
-            parts = [p for p in [city, region, country] if p]
-            location = ", ".join(parts) if parts else "Unknown"
-            geo_cache[ip] = (location, org)
-            return geo_cache[ip]
+            parts = [j.get(x) for x in ("city", "region", "country") if j.get(x)]
+            geo_cache[ip] = (", ".join(parts) or "Unknown", j.get("org", ""))
         else:
             geo_cache[ip] = ("Lookup Failed", "N/A")
-            return geo_cache[ip]
     except:
         geo_cache[ip] = ("Lookup Failed", "N/A")
-        return geo_cache[ip]
+    return geo_cache[ip]
 
 log_action("Performing IP lookups...")
-unique_ips = df["ip"].dropna().unique()
-total_ips = len(unique_ips)
-for idx, ip in enumerate(unique_ips, 1):
+for idx, ip in enumerate(df["ip"].dropna().unique(), 1):
     lookup_ip(ip)
-    if idx % 10 == 0 or idx == total_ips:
-        log_progress(f"Performing IP lookups... {idx}/{total_ips}")
+    if idx % 10 == 0 or idx == len(df["ip"].dropna().unique()):
+        log_progress(f"IP lookups... {idx}/{len(df['ip'].dropna().unique())}")
 log_success("IP lookup complete.")
 
-# ---------- BUILD USERS ----------
 log_action("Building user data...")
 users = defaultdict(lambda: {"email": "", "events": []})
-
 for _, row in df.iterrows():
     email = row["email"]
-    if pd.isna(email) or email.strip() == "":
-        continue
-    if row["event"] not in ["Email Sent", "Email Opened", "Clicked Link", "Submitted Data"]:
-        continue
-
+    if pd.isna(email) or email.strip() == "": continue
+    if row["event"] not in ["Email Sent", "Email Opened", "Clicked Link", "Submitted Data"]: continue
     ip = row["ip"]
     location, isp = lookup_ip(ip) if ip else ("N/A", "N/A")
-
     users[email]["email"] = email
     users[email]["events"].append({
         "event": row["event"],
         "timestamp": row["timestamp"].isoformat() if pd.notnull(row["timestamp"]) else "N/A",
-        "ip": ip or "N/A",
-        "location": location,
-        "isp": isp,
-        "ua": row["user_agent"] or "N/A",
+        "ip": ip or "N/A", "location": location, "isp": isp,
+        "ua": row["user_agent"] or "N/A"
     })
-
 users = {email: u for email, u in users.items() if len(u["events"]) > 0}
 log_success("User data build complete.")
 
-# ---------- STATS ----------
 log_action("Generating statistics...")
 emails_sent_df = df[df["event"] == "Email Sent"]
 total_targets = emails_sent_df["email"].nunique()
@@ -217,24 +133,16 @@ open_count = len(df[df["event"] == "Email Opened"])
 click_count = len(df[df["event"] == "Clicked Link"])
 submit_count = len(df[df["event"] == "Submitted Data"])
 
-users_opened_only = 0
-users_opened_and_clicked = 0
-users_opened_clicked_submitted = 0
-
+users_opened_only, users_opened_and_clicked, users_opened_clicked_submitted = 0, 0, 0
 for u in users.values():
     ev = [e["event"] for e in u["events"]]
-    if "Submitted Data" in ev:
-        users_opened_clicked_submitted += 1
-    elif "Clicked Link" in ev:
-        users_opened_and_clicked += 1
-    elif "Email Opened" in ev:
-        users_opened_only += 1
+    if "Submitted Data" in ev: users_opened_clicked_submitted += 1
+    elif "Clicked Link" in ev: users_opened_and_clicked += 1
+    elif "Email Opened" in ev: users_opened_only += 1
 
 timeline = defaultdict(int)
 for t in df["timestamp"].dropna():
-    bucket = t.floor("h").strftime("%Y-%m-%d %H:%M")
-    timeline[bucket] += 1
-
+    timeline[t.floor("h").strftime("%Y-%m-%d %H:%M")] += 1
 timeline_sorted = sorted(timeline.items())
 timeline_labels = [t[0] for t in timeline_sorted]
 timeline_raw = [datetime.strptime(t[0], "%Y-%m-%d %H:%M").isoformat() for t in timeline_sorted]
@@ -244,28 +152,79 @@ ua_counter = Counter(df["user_agent"].dropna())
 ua_labels = list(ua_counter.keys())
 ua_counts = list(ua_counter.values())
 
-# ---------- BUILD CREDENTIALS TABLE ----------
-fieldnames = set()
-for c in df["credentials"].dropna():
-    for k, _ in c:
-        fieldnames.add(k)
-fieldnames = sorted(fieldnames)
-
+fieldnames = sorted({k for c in df["credentials"].dropna() for k, _ in c})
 credentials_rows = []
 for _, row in df[df["event"] == "Submitted Data"].iterrows():
     creds = row["credentials"]
     if creds:
         cred_dict = {k: v for k, v in creds}
-        row_data = {
+        credentials_rows.append({
             "timestamp": row["timestamp"].isoformat() if pd.notnull(row["timestamp"]) else "N/A",
             "ip": row["ip"] or "N/A",
             "location": lookup_ip(row["ip"])[0] if row["ip"] else "N/A",
             "isp": lookup_ip(row["ip"])[1] if row["ip"] else "N/A",
             "fields": [cred_dict.get(f, "N/A") for f in fieldnames]
-        }
-        credentials_rows.append(row_data)
+        })
 
-# ---------- HTML ----------
+log_action("Building per-IP phishing activity...")
+ip_activity = {}
+ip_cred_map = defaultdict(list)
+for cred in credentials_rows:
+    if not cred["ip"].startswith(PRIVATE_IP_PREFIXES):
+        ip_cred_map[cred["ip"]].append(cred)
+
+for _, row in df.iterrows():
+    ip = row["ip"]
+    if not ip or pd.isna(ip) or ip.startswith(PRIVATE_IP_PREFIXES): continue
+    if ip not in ip_activity:
+        location, isp = lookup_ip(ip)
+        ip_activity[ip] = {
+            "ip": ip,
+            "location": location,
+            "isp": isp,
+            "user_agents": set(),
+            "events": [],
+            "credential_rows": ip_cred_map.get(ip, [])
+        }
+    ua = row["user_agent"]
+    if ua and pd.notna(ua): ip_activity[ip]["user_agents"].add(ua)
+for _, row in df.iterrows():
+    ip = row["ip"]
+    if not ip or pd.isna(ip) or ip.startswith(PRIVATE_IP_PREFIXES):
+        continue
+
+    if ip not in ip_activity:
+        location, isp = lookup_ip(ip)
+        ip_activity[ip] = {
+            "ip": ip,
+            "location": location,
+            "isp": isp,
+            "user_agents": set(),
+            "events": [],
+            "credential_rows": ip_cred_map.get(ip, [])
+        }
+
+    ua = row["user_agent"]
+    if ua and pd.notna(ua):
+        ip_activity[ip]["user_agents"].add(ua)
+
+    ip_activity[ip]["events"].append({
+        "timestamp": row["timestamp"].isoformat() if pd.notnull(row["timestamp"]) else "N/A",
+        "event": row["event"],
+        "ip": ip,
+        "location": ip_activity[ip]["location"],
+        "isp": ip_activity[ip]["isp"],
+        "ua": row["user_agent"] or "N/A"
+    })
+
+
+
+
+for ip in ip_activity:
+    ip_activity[ip]["user_agents"] = sorted(ip_activity[ip]["user_agents"])
+
+log_success(f"Compiled phishing activity for {len(ip_activity)} public IPs.")
+
 html_template = """
 <!DOCTYPE html>
 <html lang="en">
@@ -276,33 +235,12 @@ html_template = """
 <script src="https://cdn.jsdelivr.net/npm/luxon@3.4.3/build/global/luxon.min.js"></script>
 <style>
     body { font-family: Arial, sans-serif; margin: 40px; }
-    table { 
-        border-collapse: collapse; 
-        width: 100%; 
-        margin-bottom: 40px; 
-        table-layout: auto;
-    }
-    th, td {
-        border: 1px solid #ccc;
-        padding: 8px;
-        text-align: left;
-        vertical-align: middle;
-        word-wrap: break-word;
-    }
+    table { border-collapse: collapse; width: 100%; margin-bottom: 40px; table-layout: auto; }
+    th, td { border: 1px solid #ccc; padding: 8px; text-align: left; vertical-align: middle; word-wrap: break-word; }
     th { background-color: #f2f2f2; }
-    .masked, .unmasked { 
-        display: inline-block;
-        width: 100%; 
-        overflow: visible;
-        word-wrap: break-word;
-    }
+    .masked, .unmasked { display: inline-block; width: 100%; overflow: visible; word-wrap: break-word; }
     .unmasked { display: none; }
-    button.toggle-btn { 
-        border: none; 
-        background: none; 
-        font-size: 16px; 
-        cursor: pointer; 
-    }
+    button.toggle-btn { border: none; background: none; font-size: 16px; cursor: pointer; }
 </style>
 </head>
 <body>
@@ -326,18 +264,10 @@ html_template = """
 </select>
 
 <h2>Charts</h2>
-<div class="chart-container">
-    <canvas id="eventChart"></canvas>
-</div>
-<div class="chart-container">
-    <canvas id="userSummary"></canvas>
-</div>
-<div class="chart-container">
-    <canvas id="timelineChart"></canvas>
-</div>
-<div class="chart-container">
-    <canvas id="uaChart"></canvas>
-</div>
+<div class="chart-container"><canvas id="eventChart"></canvas></div>
+<div class="chart-container"><canvas id="userSummary"></canvas></div>
+<div class="chart-container"><canvas id="timelineChart"></canvas></div>
+<div class="chart-container"><canvas id="uaChart"></canvas></div>
 
 {% if credentials_rows %}
 <h2>Captured Credentials</h2>
@@ -378,12 +308,7 @@ html_template = """
 <h4>Event Timeline:</h4>
 <table>
     <tr>
-        <th>Time</th>
-        <th>Event</th>
-        <th>IP</th>
-        <th>Location</th>
-        <th>ISP</th>
-        <th>User Agent</th>
+        <th>Time</th><th>Event</th><th>IP</th><th>Location</th><th>ISP</th><th>User Agent</th>
     </tr>
     {% for e in user.events %}
     <tr>
@@ -397,6 +322,91 @@ html_template = """
     {% endfor %}
 </table>
 {% endfor %}
+
+{% if ip_activity %}
+<h2>Phishing Activity Grouped by Source IP</h2>
+{% for ip_data in ip_activity %}
+<h3>Phishing Activity for IP: {{ ip_data.ip }}</h3>
+<table>
+    <tr><th>Location</th><td>{{ ip_data.location }}</td></tr>
+    <tr><th>ISP</th><td>{{ ip_data.isp }}</td></tr>
+</table>
+
+<h4>Credential Submissions ({{ ip_data.credential_rows|length }}):</h4>
+{% if ip_data.credential_rows %}
+    <p>
+        <button onclick="toggleAllPasswords(true)">🔓 Show All</button>
+        <button onclick="toggleAllPasswords(false)">🔒 Hide All</button>
+    </p>
+    <table>
+        <tr>
+            <th>Time</th>
+            {% for f in fieldnames %}
+            <th>{{ f }}</th>
+            {% endfor %}
+            <th>IP</th>
+            <th>Location</th>
+            <th>ISP</th>
+        </tr>
+        {% for cred in ip_data.credential_rows %}
+        <tr>
+            <td class="datetime" data-utc="{{ cred.timestamp }}">{{ cred.timestamp }}</td>
+            {% for val in cred.fields %}
+            <td>
+                <span class="masked">********</span>
+                <span class="unmasked">{{ val }}</span>
+            </td>
+            {% endfor %}
+            <td>{{ cred.ip }}</td>
+            <td>{{ cred.location }}</td>
+            <td>{{ cred.isp }}</td>
+        </tr>
+        {% endfor %}
+    </table>
+{% else %}
+    <p>None</p>
+{% endif %}
+
+<h4>User Agents:</h4>
+{% if ip_data.user_agents %}
+    <table>
+        <tr><th>User Agent</th></tr>
+        {% for ua in ip_data.user_agents %}
+        <tr><td>{{ ua }}</td></tr>
+        {% endfor %}
+    </table>
+{% else %}
+    <p>None</p>
+{% endif %}
+
+<h4>Timeline of Events:</h4>
+{% if ip_data.events %}
+    <table>
+        <tr>
+            <th>Time</th>
+            <th>Event</th>
+            <th>IP</th>
+            <th>Location</th>
+            <th>ISP</th>
+            <th>User Agent</th>
+        </tr>
+        {% for e in ip_data.events %}
+        <tr>
+            <td class="datetime" data-utc="{{ e.timestamp }}">{{ e.timestamp }}</td>
+            <td>{{ e.event }}</td>
+            <td>{{ e.ip }}</td>
+            <td>{{ e.location }}</td>
+            <td>{{ e.isp }}</td>
+            <td>{{ e.ua }}</td>
+        </tr>
+        {% endfor %}
+    </table>
+{% else %}
+    <p>No events recorded.</p>
+{% endif %}
+<hr style="margin:40px 0;">
+{% endfor %}
+{% endif %}
 
 <script>
 function toggleAllPasswords(show) {
@@ -485,13 +495,13 @@ new Chart(document.getElementById('uaChart').getContext('2d'), {
     }
 });
 </script>
-
 </body>
 </html>
 """
 
-template = Template(html_template)
 
+# After rendering:
+template = Template(html_template)  # assume html_template is defined earlier or loaded
 rendered = template.render(
     total_targets=total_targets,
     sent_count=sent_count,
@@ -509,7 +519,8 @@ rendered = template.render(
     credentials_rows=credentials_rows,
     users=list(users.values()),
     timezone_options=TIMEZONE_OPTIONS,
-    fieldnames=fieldnames
+    fieldnames=fieldnames,
+    ip_activity=list(ip_activity.values())
 )
 
 with open(OUTPUT_HTML, "w") as f:
